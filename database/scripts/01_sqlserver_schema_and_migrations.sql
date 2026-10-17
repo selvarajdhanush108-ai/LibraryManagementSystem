@@ -1,0 +1,249 @@
+-- =============================================================================
+-- KSR COLLEGE OF ENGINEERING — LIBRARY MANAGEMENT SYSTEM
+-- SQL Server (T-SQL) Normalized Relational Schema & EF Core 10 Migration Script
+-- =============================================================================
+
+CREATE DATABASE KsrLibraryDb;
+GO
+USE KsrLibraryDb;
+GO
+
+CREATE TABLE Roles (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(50) NOT NULL UNIQUE,
+    Description NVARCHAR(255) NOT NULL
+);
+
+CREATE TABLE Users (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Email NVARCHAR(150) NOT NULL UNIQUE,
+    FullName NVARCHAR(150) NOT NULL,
+    PasswordHash NVARCHAR(256) NOT NULL,
+    PasswordSalt NVARCHAR(128) NOT NULL,
+    Role NVARCHAR(30) NOT NULL CHECK (Role IN ('SuperAdmin', 'Librarian', 'Student', 'Faculty')),
+    IsActive BIT NOT NULL DEFAULT 1,
+    FailedLoginAttempts INT NOT NULL DEFAULT 0,
+    LockoutUntil DATETIME2 NULL,
+    LastLoginAt DATETIME2 NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Departments (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Code NVARCHAR(20) NOT NULL UNIQUE,
+    Name NVARCHAR(150) NOT NULL UNIQUE,
+    HeadOfDepartment NVARCHAR(150) NULL,
+    IsArchived BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Programmes (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Code NVARCHAR(30) NOT NULL UNIQUE,
+    Name NVARCHAR(150) NOT NULL,
+    DegreeLevel NVARCHAR(10) NOT NULL CHECK (DegreeLevel IN ('UG', 'PG', 'PhD')),
+    DepartmentId INT NOT NULL FOREIGN KEY REFERENCES Departments(Id),
+    DurationYears INT NOT NULL DEFAULT 4,
+    IsArchived BIT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE Members (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    UserId INT NULL UNIQUE FOREIGN KEY REFERENCES Users(Id),
+    MemberCode NVARCHAR(40) NOT NULL UNIQUE,
+    RegistrationNumber NVARCHAR(40) NOT NULL UNIQUE,
+    FullName NVARCHAR(150) NOT NULL,
+    Email NVARCHAR(150) NOT NULL UNIQUE,
+    Phone NVARCHAR(30) NULL,
+    MemberType NVARCHAR(20) NOT NULL CHECK (MemberType IN ('Student', 'Faculty')),
+    DepartmentId INT NOT NULL FOREIGN KEY REFERENCES Departments(Id),
+    ProgrammeId INT NULL FOREIGN KEY REFERENCES Programmes(Id),
+    YearOfStudy INT NULL,
+    AccountStatus NVARCHAR(20) NOT NULL DEFAULT 'Active' CHECK (AccountStatus IN ('Active', 'Inactive', 'Suspended')),
+    MembershipStartDate DATE NOT NULL,
+    MembershipEndDate DATE NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Authors (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    FullName NVARCHAR(150) NOT NULL UNIQUE,
+    Biography NVARCHAR(500) NULL,
+    Country NVARCHAR(80) NULL,
+    IsArchived BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Publishers (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Name NVARCHAR(150) NOT NULL UNIQUE,
+    City NVARCHAR(100) NULL,
+    Website NVARCHAR(255) NULL,
+    ContactEmail NVARCHAR(150) NULL,
+    IsArchived BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Categories (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    Code NVARCHAR(30) NOT NULL UNIQUE,
+    Name NVARCHAR(150) NOT NULL UNIQUE,
+    DeweyPrefix NVARCHAR(30) NULL,
+    Description NVARCHAR(500) NULL,
+    IsArchived BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Books (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    BookCode NVARCHAR(40) NOT NULL UNIQUE,
+    Isbn NVARCHAR(20) NULL,
+    Title NVARCHAR(300) NOT NULL,
+    Subtitle NVARCHAR(300) NULL,
+    PublisherId INT NOT NULL FOREIGN KEY REFERENCES Publishers(Id),
+    Edition NVARCHAR(50) NULL,
+    PublicationYear INT NOT NULL,
+    CategoryId INT NOT NULL FOREIGN KEY REFERENCES Categories(Id),
+    Language NVARCHAR(50) NOT NULL DEFAULT 'English',
+    Description NVARCHAR(MAX) NULL,
+    ShelfLocation NVARCHAR(100) NOT NULL,
+    CoverUrl NVARCHAR(500) NULL,
+    IsArchived BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE UNIQUE INDEX IX_Books_Isbn_NotNull ON Books(Isbn) WHERE Isbn IS NOT NULL;
+
+CREATE TABLE BookAuthors (
+    BookId INT NOT NULL FOREIGN KEY REFERENCES Books(Id) ON DELETE CASCADE,
+    AuthorId INT NOT NULL FOREIGN KEY REFERENCES Authors(Id),
+    AuthorOrder INT NOT NULL DEFAULT 1,
+    PRIMARY KEY (BookId, AuthorId)
+);
+
+CREATE TABLE PhysicalBookCopies (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    BookId INT NOT NULL FOREIGN KEY REFERENCES Books(Id),
+    AccessionNumber NVARCHAR(50) NOT NULL UNIQUE,
+    Barcode NVARCHAR(50) NOT NULL UNIQUE,
+    AcquisitionDate DATE NOT NULL,
+    AcquisitionPrice DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    ShelfLocation NVARCHAR(100) NOT NULL,
+    Status NVARCHAR(30) NOT NULL DEFAULT 'Available' CHECK (Status IN ('Available', 'Issued', 'Reserved', 'Lost', 'Damaged', 'UnderMaintenance')),
+    ConditionNotes NVARCHAR(500) NULL,
+    IsArchived BIT NOT NULL DEFAULT 0,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Loans (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    LoanNumber NVARCHAR(40) NOT NULL UNIQUE,
+    MemberId INT NOT NULL FOREIGN KEY REFERENCES Members(Id),
+    CopyId INT NOT NULL FOREIGN KEY REFERENCES PhysicalBookCopies(Id),
+    BookId INT NOT NULL FOREIGN KEY REFERENCES Books(Id),
+    IssuedAt DATETIME2 NOT NULL,
+    DueDate DATE NOT NULL,
+    ReturnedAt DATETIME2 NULL,
+    RenewalCount INT NOT NULL DEFAULT 0,
+    IssuedByUserId INT NOT NULL FOREIGN KEY REFERENCES Users(Id),
+    ReturnedByUserId INT NULL FOREIGN KEY REFERENCES Users(Id),
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Active' CHECK (Status IN ('Active', 'Returned', 'Overdue')),
+    Remarks NVARCHAR(500) NULL
+);
+
+CREATE TABLE Reservations (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    ReservationNumber NVARCHAR(40) NOT NULL UNIQUE,
+    BookId INT NOT NULL FOREIGN KEY REFERENCES Books(Id),
+    MemberId INT NOT NULL FOREIGN KEY REFERENCES Members(Id),
+    AllocatedCopyId INT NULL FOREIGN KEY REFERENCES PhysicalBookCopies(Id),
+    Status NVARCHAR(30) NOT NULL DEFAULT 'Pending' CHECK (Status IN ('Pending', 'ReadyForPickup', 'Approved', 'Fulfilled', 'Cancelled', 'Expired', 'Rejected')),
+    CreatedAt DATETIME2 NOT NULL,
+    ExpiresAt DATETIME2 NULL,
+    ApprovedByUserId INT NULL FOREIGN KEY REFERENCES Users(Id),
+    Notes NVARCHAR(500) NULL
+);
+
+CREATE TABLE FineAssessments (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    LoanId INT NOT NULL UNIQUE FOREIGN KEY REFERENCES Loans(Id),
+    MemberId INT NOT NULL FOREIGN KEY REFERENCES Members(Id),
+    OverdueDays INT NOT NULL,
+    AssessedAmount DECIMAL(10,2) NOT NULL,
+    PaidAmount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    WaivedAmount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    Status NVARCHAR(20) NOT NULL DEFAULT 'Unpaid' CHECK (Status IN ('Unpaid', 'PartiallyPaid', 'Paid', 'Waived')),
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE FinePayments (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    FineAssessmentId INT NOT NULL FOREIGN KEY REFERENCES FineAssessments(Id),
+    MemberId INT NOT NULL FOREIGN KEY REFERENCES Members(Id),
+    Amount DECIMAL(10,2) NOT NULL,
+    PaymentMethod NVARCHAR(50) NOT NULL DEFAULT 'Cash Counter',
+    ReceiptNumber NVARCHAR(50) NOT NULL UNIQUE,
+    RecordedByUserId INT NOT NULL FOREIGN KEY REFERENCES Users(Id),
+    PaidAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    Notes NVARCHAR(500) NULL
+);
+
+CREATE TABLE FineWaivers (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    FineAssessmentId INT NOT NULL FOREIGN KEY REFERENCES FineAssessments(Id),
+    MemberId INT NOT NULL FOREIGN KEY REFERENCES Members(Id),
+    Amount DECIMAL(10,2) NOT NULL,
+    Reason NVARCHAR(500) NOT NULL,
+    AuthorizedByUserId INT NOT NULL FOREIGN KEY REFERENCES Users(Id),
+    WaivedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE Notifications (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    UserId INT NULL FOREIGN KEY REFERENCES Users(Id),
+    MemberId INT NULL FOREIGN KEY REFERENCES Members(Id),
+    Title NVARCHAR(200) NOT NULL,
+    Message NVARCHAR(1000) NOT NULL,
+    NotificationType NVARCHAR(40) NOT NULL,
+    IsRead BIT NOT NULL DEFAULT 0,
+    RelatedEntityType NVARCHAR(50) NULL,
+    RelatedEntityId INT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE LibraryPolicies (
+    Id INT PRIMARY KEY CHECK (Id = 1),
+    StudentLoanDays INT NOT NULL DEFAULT 14,
+    FacultyLoanDays INT NOT NULL DEFAULT 28,
+    StudentLoanLimit INT NOT NULL DEFAULT 3,
+    FacultyLoanLimit INT NOT NULL DEFAULT 5,
+    FinePerDay DECIMAL(10,2) NOT NULL DEFAULT 2.00,
+    MaxRenewals INT NOT NULL DEFAULT 2,
+    RenewalExtensionDays INT NOT NULL DEFAULT 14,
+    AllowOverdueRenewal BIT NOT NULL DEFAULT 0,
+    BlockIssueOnOverdue BIT NOT NULL DEFAULT 1,
+    MaxUnpaidFineLimit DECIMAL(10,2) NOT NULL DEFAULT 100.00,
+    ReservationExpiryHours INT NOT NULL DEFAULT 48,
+    ExcludeSundaysInFine BIT NOT NULL DEFAULT 0,
+    UpdatedByUserId INT NULL,
+    UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+
+CREATE TABLE AuditLogs (
+    Id INT IDENTITY(1,1) PRIMARY KEY,
+    ActorUserId INT NULL,
+    ActorName NVARCHAR(150) NOT NULL,
+    ActorRole NVARCHAR(50) NOT NULL,
+    Action NVARCHAR(100) NOT NULL,
+    EntityType NVARCHAR(80) NOT NULL,
+    EntityId NVARCHAR(80) NULL,
+    Details NVARCHAR(MAX) NULL,
+    IpAddress NVARCHAR(50) NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO

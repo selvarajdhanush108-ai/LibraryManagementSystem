@@ -1,0 +1,6 @@
+{
+  "name": "KSR College of Engineering — Library Management System",
+  "description": "Centralized institutional Library Management System for KSR College of Engineering, Tamil Nadu, featuring catalog management, barcode circulation, fine assessment, reservations, analytics, and student/faculty self-service portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
